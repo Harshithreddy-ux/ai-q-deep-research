@@ -7,31 +7,33 @@ from typing import List
 # =====================================================
 # PAGE CONFIG
 # =====================================================
-st.set_page_config(
-    page_title="AI-Q Deep Research Agent",
-    layout="wide"
-)
+st.set_page_config(page_title="AI-Q Knowledge & Research Assistant", layout="wide")
 
 # =====================================================
-# BACKGROUND ANIMATION (SUBTLE, NO LOGOS)
+# SNOW BACKGROUND ANIMATION
 # =====================================================
 st.markdown(
     """
     <style>
     body {
-        background: linear-gradient(270deg, #f7f7f7, #ffffff, #f2f2f2);
-        background-size: 600% 600%;
-        animation: gradientMove 18s ease infinite;
+        background: linear-gradient(270deg, #f9f9f9, #ffffff);
+        overflow-x: hidden;
         font-family: Arial, sans-serif;
     }
-    @keyframes gradientMove {
-        0% {background-position: 0% 50%;}
-        50% {background-position: 100% 50%;}
-        100% {background-position: 0% 50%;}
+    .snowflake {
+        position: fixed;
+        top: -10px;
+        color: #bbb;
+        font-size: 12px;
+        animation: fall linear infinite;
+        opacity: 0.7;
     }
-    .small-text {
+    @keyframes fall {
+        to { transform: translateY(110vh); }
+    }
+    .content {
         font-size: 14px;
-        line-height: 1.5;
+        line-height: 1.6;
         color: #333;
     }
     </style>
@@ -39,171 +41,170 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+for i in range(18):
+    st.markdown(
+        f"<div class='snowflake' style='left:{i*5}%; animation-duration:{10+i}s;'>*</div>",
+        unsafe_allow_html=True
+    )
+
+# =====================================================
+# HEADER
+# =====================================================
 st.markdown(
-    "<h2 style='text-align:center;'>AI-Q Deep Research Agent</h2>"
-    "<p style='text-align:center; color:#555;'>Interactive research system</p>",
+    "<h2 style='text-align:center;'>AI-Q Knowledge & Research Assistant</h2>"
+    "<p style='text-align:center;color:#555;'>Concepts • Industry • Market • Future</p>",
     unsafe_allow_html=True
 )
-
 st.divider()
 
 # =====================================================
 # API KEYS
 # =====================================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 if not GROQ_API_KEY:
-    st.error("GROQ_API_KEY missing in Streamlit Secrets.")
+    st.error("GROQ_API_KEY missing. Add it in Streamlit → Secrets.")
     st.stop()
 
-# =====================================================
-# GROQ CLIENT
-# =====================================================
 from groq import Groq
 
 @st.cache_resource(show_spinner=False)
-def load_groq_client():
+def load_groq():
     return Groq(api_key=GROQ_API_KEY)
 
-client = load_groq_client()
+client = load_groq()
 
 def clean_text(text: str) -> str:
-    # remove emojis & symbols
     return re.sub(r"[^\x00-\x7F]+", "", text)
 
 def groq_complete(prompt: str) -> str:
     try:
-        response = client.chat.completions.create(
+        res = client.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[{"role": "user", "content": prompt[:6000]}],
-            temperature=0.3,
-            max_tokens=700,
+            temperature=0.4,
+            max_tokens=900,
         )
-        return clean_text(response.choices[0].message.content)
+        return clean_text(res.choices[0].message.content)
     except Exception:
-        return ""
+        return "Content generation failed. Please try again."
 
 # =====================================================
-# TAVILY SEARCH
-# =====================================================
-def tavily_search(query: str) -> str:
-    if not TAVILY_API_KEY:
-        return "Web search unavailable."
-
-    from tavily import TavilyClient
-    tavily = TavilyClient(api_key=TAVILY_API_KEY)
-
-    results = tavily.search(query=query, max_results=3)
-    if not results.get("results"):
-        return "No relevant web data found."
-
-    return "\n".join(clean_text(r["content"][:800]) for r in results["results"])
-
-# =====================================================
-# AGENT LOGIC
+# SMART OUTLINE (ALWAYS FULL TOPICS)
 # =====================================================
 def plan_research(topic: str) -> List[str]:
     prompt = f"""
-Create 5 detailed research goals for:
+Create a comprehensive outline for the topic below.
+
+The outline MUST include:
+- Definition and overview
+- History and evolution
+- Technology or working principles
+- Types or categories
+- Uses and importance
+- Business model and industry ecosystem
+- Market share and major players
+- Pricing strategies and customer segments
+- Advantages and disadvantages
+- Current trends and future outlook
+
+Return the outline as a numbered list.
+
+Topic:
 {topic}
-
-Focus on:
-- Business model
-- Technology & logistics
-- Pricing & customer experience
-- Market growth
-- Future outlook
-
-Return as numbered list.
 """
     text = groq_complete(prompt)
     goals = re.findall(r"\d+\.\s*(.*)", text)
 
     if not goals:
         return [
-            f"Business model comparison of {topic}",
-            f"Technology and logistics comparison of {topic}",
-            f"Pricing strategy and customer experience of {topic}",
-            f"Market growth and regional dominance of {topic}",
-            f"Strengths, weaknesses, and future outlook of {topic}",
+            f"Definition and overview of {topic}",
+            f"History and evolution of {topic}",
+            f"Technology and working principles of {topic}",
+            f"Types and categories of {topic}",
+            f"Uses and importance of {topic}",
+            f"Business model and industry ecosystem of {topic}",
+            f"Market share and major players in {topic}",
+            f"Pricing strategies and customer segments of {topic}",
+            f"Advantages and disadvantages of {topic}",
+            f"Current trends and future outlook of {topic}",
         ]
-    return goals[:5]
 
+    return goals[:10]
+
+# =====================================================
+# FINAL REPORT GENERATION (LONG & DETAILED)
+# =====================================================
 def write_report(topic: str, context: str) -> str:
     prompt = f"""
-Write a LONG, detailed academic-style report on:
+Write a VERY DETAILED, structured, academic-style explanation on:
 
 {topic}
 
-Using this research:
+Use the information below:
 {context}
 
-Include:
-Introduction
-Detailed comparison sections
-Advantages & disadvantages
-Future outlook
-Conclusion
+Your response MUST include the following sections clearly:
 
-Avoid emojis and symbols.
+1. Introduction and Definition
+2. Historical Background and Evolution (with years)
+3. Technology / Working Principles
+4. Types or Categories
+5. Uses and Importance in Real Life
+6. Business Model and Industry Ecosystem
+7. Market Share and Major Companies
+8. Pricing Strategies and Customer Segments
+9. Advantages and Disadvantages
+10. Current Trends and Innovations
+11. Future Scope and Outlook
+12. Conclusion
+
+Write clearly and thoroughly.
+Avoid symbols and emojis.
 """
     return groq_complete(prompt)
 
 # =====================================================
-# SEARCH-LIKE INPUT
+# INPUT
 # =====================================================
-st.subheader("Enter Research Topic")
-topic = st.text_input(
-    "",
-    placeholder="Search here... (e.g., Flipkart vs Amazon India)"
-)
+st.subheader("Enter Topic")
+query = st.text_input("", placeholder="e.g., What is a laptop")
 
-run = st.button("Run Deep Research", use_container_width=True)
+run = st.button("Generate", use_container_width=True)
 
 # =====================================================
-# PIPELINE
+# MAIN PIPELINE
 # =====================================================
 if run:
-    if not topic.strip():
+    if not query.strip():
         st.warning("Please enter a topic.")
         st.stop()
 
     progress = st.progress(0)
     status = st.empty()
 
-    status.info("Planning research...")
-    goals = plan_research(topic)
-    progress.progress(20)
+    status.info("Planning content...")
+    goals = plan_research(query)
+    progress.progress(25)
 
-    st.subheader("Research Goals")
+    st.subheader("Content Outline")
     for i, g in enumerate(goals, 1):
-        st.markdown(f"<div class='small-text'><b>Goal {i}:</b> {g}</div>",
-                    unsafe_allow_html=True)
+        st.markdown(f"<div class='content'><b>{i}. {g}</b></div>", unsafe_allow_html=True)
 
-    status.info("Gathering information...")
-    research_blocks = []
+    status.info("Generating full explanation...")
+    progress.progress(60)
 
-    for idx, goal in enumerate(goals):
-        with st.expander(f"Searching: {goal}", expanded=False):
-            data = tavily_search(goal + " India e-commerce analysis")
-            research_blocks.append(data)
-            st.markdown(f"<div class='small-text'>{data}</div>",
-                        unsafe_allow_html=True)
-            progress.progress(min(30 + (idx + 1) * 10, 90))
-            time.sleep(0.3)
+    context = "\n".join(goals)
+    report = write_report(query, context)
 
-    status.info("Generating final report...")
-    report = write_report(topic, "\n\n".join(research_blocks))
     progress.progress(100)
-
-    st.success("Research completed")
+    status.success("Completed")
 
     st.divider()
-    st.subheader("Final Research Report")
+    st.subheader("Final Explanation")
 
     st.markdown(
-        f"<div class='small-text'>{report}</div>",
+        f"<div class='content'>{report}</div>",
         unsafe_allow_html=True
     )
 
@@ -212,6 +213,6 @@ if run:
 # =====================================================
 st.divider()
 st.markdown(
-    "<p style='text-align:center; font-size:13px; color:#666;'>AI-Q Deep Research Agent</p>",
+    "<p style='text-align:center;font-size:13px;color:#666;'>AI-Q Assistant</p>",
     unsafe_allow_html=True
 )
