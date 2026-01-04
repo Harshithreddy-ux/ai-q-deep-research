@@ -48,10 +48,23 @@ class AgentState(TypedDict):
 # =========================================================
 @st.cache_resource(show_spinner=False)
 def load_llm():
-    from langchain_nvidia_ai_endpoints import ChatNVIDIA
-    return ChatNVIDIA(
-        model="nvidia/llama-3.1-nemotron-70b-instruct"
-    )
+    try:
+        from langchain_nvidia_ai_endpoints import ChatNVIDIA
+        if not os.getenv("NVIDIA_API_KEY"):
+            raise RuntimeError("NVIDIA_API_KEY missing")
+        return ChatNVIDIA(
+            model="nvidia/llama-3.1-nemotron-70b-instruct"
+        )
+    except Exception:
+        from langchain_core.messages import AIMessage
+
+        class MockLLM:
+            def invoke(self, messages):
+                return AIMessage(
+                    content="(Mock response) NVIDIA LLM not available on Streamlit Cloud.\n\nThis is a demo-safe fallback response."
+                )
+
+        return MockLLM()
 
 def load_search_tool():
     if not TAVILY_KEY:
