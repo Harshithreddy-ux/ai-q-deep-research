@@ -16,7 +16,7 @@ st.markdown(
     """
     <h1 style="text-align:center;">AI-Q Deep Research Agent</h1>
     <p style="text-align:center;color:gray;">
-    Interactive research system with live execution flow
+    Interactive deep research system with live execution flow
     </p>
     """,
     unsafe_allow_html=True
@@ -86,7 +86,7 @@ def plan_research(topic: str) -> List[str]:
 You are a senior market and technology analyst.
 
 Create 5 detailed research goals for the topic below.
-Each goal must focus on a DIFFERENT dimension such as:
+Each goal must focus on a different dimension such as:
 - Business model
 - Technology & logistics
 - Pricing & customer experience
@@ -99,7 +99,6 @@ Topic:
 {topic}
 """
     text = groq_complete(prompt)
-
     goals = re.findall(r"\d+\.\s*(.*)", text)
 
     if not goals:
@@ -112,6 +111,7 @@ Topic:
         ]
 
     return goals[:5]
+
 def write_report(topic: str, context: str) -> str:
     prompt = f"""
 You are an expert industry analyst.
@@ -139,7 +139,6 @@ Use clear headings, bullet points, and sub-sections.
 Make the report comprehensive and in-depth.
 """
     return groq_complete(prompt)
-
 
 # =====================================================
 # UI INPUT
@@ -169,7 +168,7 @@ if run:
     time.sleep(0.5)
 
     goals = plan_research(topic)
-    progress.progress(25)
+    progress.progress(20)
 
     st.subheader("Research Goals")
     for i, goal in enumerate(goals, 1):
@@ -186,10 +185,14 @@ if run:
     for idx, goal in enumerate(goals):
         with st.expander(f"Searching: {goal}", expanded=True):
             with st.spinner("Searching..."):
-                result = tavily_search(goal)
+                result = tavily_search(
+                    goal + " market share pricing logistics technology customer experience India"
+                )
                 research_blocks.append(result)
                 st.write(result[:1000])
-                progress.progress(40 + (idx + 1) * 15)
+
+                # ✅ SAFE progress calculation (NO overflow)
+                progress.progress(min(30 + (idx + 1) * 10, 90))
                 time.sleep(0.4)
 
     # ---------------- WRITE ----------------
@@ -204,7 +207,7 @@ if run:
     # ---------------- OUTPUT ----------------
     st.divider()
     st.subheader("Final Research Report")
-    with st.expander("View Report", expanded=True):
+    with st.expander("View Full Report", expanded=True):
         st.write(report)
 
 # =====================================================
