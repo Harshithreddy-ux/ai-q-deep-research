@@ -4,35 +4,34 @@ import re
 import time
 from typing import List
 
-# =============================
+# =====================================================
 # PAGE CONFIG
-# =============================
+# =====================================================
 st.set_page_config(
     page_title="AI-Q Deep Research Agent",
     layout="wide"
 )
 
-st.title("AI-Q Deep Research Agent")
-st.caption("Groq + Tavily powered research system (stable build)")
-
+st.title("🧠 AI-Q Deep Research Agent")
+st.caption("Clean rebuild • Groq + Tavily • Stable Streamlit Cloud version")
 st.divider()
 
-# =============================
-# API KEYS
-# =============================
+# =====================================================
+# API KEYS (from Streamlit Secrets or env)
+# =====================================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 if not GROQ_API_KEY:
-    st.error("GROQ_API_KEY missing in Streamlit Secrets")
+    st.error("GROQ_API_KEY is missing. Add it in Streamlit → App Settings → Secrets.")
     st.stop()
 
 if not TAVILY_API_KEY:
-    st.warning("TAVILY_API_KEY missing – web search limited")
+    st.warning("TAVILY_API_KEY not found. Web research will be limited.")
 
-# =============================
-# GROQ CLIENT (OFFICIAL SDK)
-# =============================
+# =====================================================
+# GROQ CLIENT (OFFICIAL SDK – NO LANGCHAIN)
+# =====================================================
 from groq import Groq
 
 @st.cache_resource(show_spinner=False)
@@ -41,23 +40,8 @@ def load_groq_client():
 
 client = load_groq_client()
 
-# =============================
-# TAVILY SEARCH
-# =============================
-def tavily_search(query: str) -> str:
-    if not TAVILY_API_KEY:
-        return "Web search unavailable."
-
-    from tavily import TavilyClient
-    tavily = TavilyClient(api_key=TAVILY_API_KEY)
-    results = tavily.search(query=query, max_results=3)
-    return "\n".join([r["content"] for r in results["results"]])
-
-# =============================
-# LLM FUNCTIONS (PURE GROQ)
-# =============================
 def groq_complete(prompt: str) -> str:
-    completion = client.chat.completions.create(
+    response = client.chat.completions.create(
         model="llama3-8b-8192",
         messages=[
             {"role": "user", "content": prompt}
@@ -65,11 +49,30 @@ def groq_complete(prompt: str) -> str:
         temperature=0.3,
         max_tokens=1024,
     )
-    return completion.choices[0].message.content
+    return response.choices[0].message.content
 
-# =============================
-# AGENT LOGIC
-# =============================
+# =====================================================
+# TAVILY SEARCH (OPTIONAL)
+# =====================================================
+def tavily_search(query: str) -> str:
+    if not TAVILY_API_KEY:
+        return "Web search unavailable (TAVILY_API_KEY missing)."
+
+    from tavily import TavilyClient
+    tavily = TavilyClient(api_key=TAVILY_API_KEY)
+
+    results = tavily.search(query=query, max_results=3)
+
+    if not results.get("results"):
+        return "No web results found."
+
+    return "\n\n".join(
+        f"- {r['content']}" for r in results["results"]
+    )
+
+# =====================================================
+# AGENT LOGIC (SIMPLE & SAFE)
+# =====================================================
 def plan_research(topic: str) -> List[str]:
     prompt = f"""
 Break the topic below into EXACTLY 3 research goals.
@@ -91,43 +94,43 @@ Topic:
 Use this research information:
 {context}
 
-Include:
+Structure:
 - Introduction
 - Feature comparison
-- Pros & cons
+- Pros and cons
 - Conclusion
 """
     return groq_complete(prompt)
 
-# =============================
+# =====================================================
 # UI
-# =============================
+# =====================================================
 topic = st.text_input(
     "Enter a research topic",
-    placeholder="Compare Flipkart and Amazon in India"
+    placeholder="Compare Flipkart and Amazon in the Indian e-commerce market"
 )
 
-run = st.button("Run Deep Research")
+run = st.button("🚀 Run Deep Research")
 
 if run:
     if not topic.strip():
-        st.error("Please enter a topic")
+        st.error("Please enter a topic.")
         st.stop()
 
     progress = st.progress(0)
     status = st.empty()
 
-    # PLAN
+    # STEP 1: PLAN
     status.info("Planning research goals...")
     goals = plan_research(topic)
-    progress.progress(30)
+    progress.progress(25)
     time.sleep(0.3)
 
-    st.subheader("Research Goals")
+    st.subheader("📌 Research Goals")
     for i, g in enumerate(goals, 1):
         st.markdown(f"**{i}. {g}**")
 
-    # SEARCH
+    # STEP 2: SEARCH
     status.info("Collecting web research...")
     research_blocks = []
     for idx, goal in enumerate(goals):
@@ -136,7 +139,7 @@ if run:
             progress.progress(40 + idx * 15)
             time.sleep(0.3)
 
-    # WRITE
+    # STEP 3: WRITE
     status.info("Writing final report...")
     report = write_report(topic, "\n\n".join(research_blocks))
     progress.progress(100)
@@ -144,8 +147,8 @@ if run:
     status.success("Research complete")
 
     st.divider()
-    st.subheader("Final Research Report")
+    st.subheader("📄 Final Research Report")
     st.write(report)
 
 st.divider()
-st.caption("Stable Groq + Tavily implementation • No LangChain")
+st.caption("AI-Q Deep Research Agent • Stable clean rebuild")
