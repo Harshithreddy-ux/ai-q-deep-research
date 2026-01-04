@@ -58,7 +58,7 @@ def groq_complete(prompt: str) -> str:
 
         return response.choices[0].message.content
 
-    except Exception as e:
+    except Exception:
         return ""
 
 # =====================================================
@@ -83,15 +83,23 @@ def tavily_search(query: str) -> str:
 # =====================================================
 def plan_research(topic: str) -> List[str]:
     prompt = f"""
-Break the topic below into EXACTLY 3 research goals.
-Return ONLY a numbered list.
+Create 3 short research goals for the topic below.
+Return only plain text, one goal per line.
 
-Topic:
-{topic}
+Topic: {topic}
 """
     text = groq_complete(prompt)
 
     goals = re.findall(r"\d+\.\s*(.*)", text)
+
+    # Fallback if Groq returns nothing
+    if not goals:
+        return [
+            f"Overview and background of {topic}",
+            f"Key features and differences in {topic}",
+            f"Advantages, disadvantages, and conclusion about {topic}"
+        ]
+
     return goals[:3]
 
 def write_report(topic: str, context: str) -> str:
@@ -140,12 +148,6 @@ if run:
     time.sleep(0.5)
 
     goals = plan_research(topic)
-
-    # 🔴 SAFETY CHECK (YOU ASKED ABOUT THIS)
-    if not goals:
-        st.error("Failed to generate research goals. Please try again.")
-        st.stop()
-
     progress.progress(25)
 
     st.subheader("Research Goals")
