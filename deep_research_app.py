@@ -5,7 +5,7 @@ import time
 from typing import List
 
 # =====================================================
-# PAGE CONFIG (NO LOGOS / NO EMOJIS)
+# PAGE CONFIG
 # =====================================================
 st.set_page_config(
     page_title="AI-Q Deep Research Agent",
@@ -15,8 +15,8 @@ st.set_page_config(
 st.markdown(
     """
     <h1 style="text-align:center;">AI-Q Deep Research Agent</h1>
-    <p style="text-align:center; color:gray;">
-    Interactive deep research system with live execution flow
+    <p style="text-align:center;color:gray;">
+    Interactive research system with live execution flow
     </p>
     """,
     unsafe_allow_html=True
@@ -31,7 +31,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 if not GROQ_API_KEY:
-    st.error("GROQ_API_KEY missing in Streamlit Secrets")
+    st.error("GROQ_API_KEY missing. Add it in Streamlit → Settings → Secrets.")
     st.stop()
 
 # =====================================================
@@ -46,16 +46,23 @@ def load_groq_client():
 client = load_groq_client()
 
 def groq_complete(prompt: str) -> str:
-    response = client.chat.completions.create(
-        model="llama3-8b-8192",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=1024,
-    )
-    return response.choices[0].message.content
+    try:
+        prompt = prompt[:6000]  # safety limit
+
+        response = client.chat.completions.create(
+            model="mixtral-8x7b-32768",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=512,
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return ""
 
 # =====================================================
-# TAVILY SEARCH
+# TAVILY SEARCH (LIMITED SIZE)
 # =====================================================
 def tavily_search(query: str) -> str:
     if not TAVILY_API_KEY:
@@ -67,9 +74,9 @@ def tavily_search(query: str) -> str:
     results = tavily.search(query=query, max_results=3)
 
     if not results.get("results"):
-        return "No relevant web results found."
+        return "No web data found."
 
-    return "\n".join(r["content"] for r in results["results"])
+    return "\n".join(r["content"][:1000] for r in results["results"])
 
 # =====================================================
 # AGENT LOGIC
@@ -83,11 +90,13 @@ Topic:
 {topic}
 """
     text = groq_complete(prompt)
-    return re.findall(r"\d+\.\s*(.*)", text)[:3]
+
+    goals = re.findall(r"\d+\.\s*(.*)", text)
+    return goals[:3]
 
 def write_report(topic: str, context: str) -> str:
     prompt = f"""
-Write a structured technical research report.
+Write a structured technical comparison report.
 
 Topic:
 {topic}
@@ -95,7 +104,11 @@ Topic:
 Research information:
 {context}
 
-Use headings, bullet points, and a conclusion.
+Structure:
+- Introduction
+- Feature comparison
+- Pros and cons
+- Conclusion
 """
     return groq_complete(prompt)
 
@@ -124,36 +137,41 @@ if run:
 
     # ---------------- PLAN ----------------
     status.info("Planning research goals...")
-    time.sleep(0.6)
+    time.sleep(0.5)
 
     goals = plan_research(topic)
+
+    # 🔴 SAFETY CHECK (YOU ASKED ABOUT THIS)
+    if not goals:
+        st.error("Failed to generate research goals. Please try again.")
+        st.stop()
+
     progress.progress(25)
 
-    st.subheader("Research Planning")
+    st.subheader("Research Goals")
     for i, goal in enumerate(goals, 1):
         with st.expander(f"Goal {i}", expanded=True):
             st.write(goal)
-            time.sleep(0.3)
 
     # ---------------- SEARCH ----------------
     status.info("Collecting information from the web...")
-    time.sleep(0.6)
+    time.sleep(0.5)
 
     research_blocks = []
     st.subheader("Information Gathering")
 
     for idx, goal in enumerate(goals):
-        with st.expander(f"Searching for: {goal}", expanded=True):
+        with st.expander(f"Searching: {goal}", expanded=True):
             with st.spinner("Searching..."):
                 result = tavily_search(goal)
                 research_blocks.append(result)
                 st.write(result[:1000])
                 progress.progress(40 + (idx + 1) * 15)
-                time.sleep(0.5)
+                time.sleep(0.4)
 
     # ---------------- WRITE ----------------
-    status.info("Synthesizing final report...")
-    time.sleep(0.6)
+    status.info("Writing final report...")
+    time.sleep(0.5)
 
     report = write_report(topic, "\n\n".join(research_blocks))
     progress.progress(100)
@@ -163,8 +181,7 @@ if run:
     # ---------------- OUTPUT ----------------
     st.divider()
     st.subheader("Final Research Report")
-
-    with st.expander("View Full Report", expanded=True):
+    with st.expander("View Report", expanded=True):
         st.write(report)
 
 # =====================================================
@@ -172,6 +189,6 @@ if run:
 # =====================================================
 st.divider()
 st.markdown(
-    "<p style='text-align:center; color:gray;'>AI-Q Deep Research Agent • Interactive Mode</p>",
+    "<p style='text-align:center;color:gray;'>AI-Q Deep Research Agent • Interactive Mode</p>",
     unsafe_allow_html=True
 )
