@@ -2,173 +2,150 @@ import streamlit as st
 import os
 import re
 import time
-from typing import List, TypedDict
+from typing import List
 
-# =====================================================
+# =============================
 # PAGE CONFIG
-# =====================================================
+# =============================
 st.set_page_config(
     page_title="AI-Q Deep Research Agent",
     layout="wide"
 )
 
 st.title("AI-Q Deep Research Agent")
-st.caption("Groq + Tavily powered technical research assistant")
+st.caption("Groq + Tavily powered research system (stable build)")
 
 st.divider()
 
-# =====================================================
-# ENV KEYS
-# =====================================================
-GROQ_KEY = os.getenv("GROQ_API_KEY")
-TAVILY_KEY = os.getenv("TAVILY_API_KEY")
+# =============================
+# API KEYS
+# =============================
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
-if not GROQ_KEY:
-    st.warning("GROQ_API_KEY not found. App will not generate real answers.")
-if not TAVILY_KEY:
-    st.warning("TAVILY_API_KEY not found. Web research disabled.")
+if not GROQ_API_KEY:
+    st.error("GROQ_API_KEY missing in Streamlit Secrets")
+    st.stop()
 
-# =====================================================
-# STATE
-# =====================================================
-class AgentState(TypedDict):
-    query: str
-    research_plan: List[str]
-    research_data: List[str]
-    report: str
+if not TAVILY_API_KEY:
+    st.warning("TAVILY_API_KEY missing – web search limited")
 
-# =====================================================
-# LOADERS (STABLE)
-# =====================================================
+# =============================
+# GROQ CLIENT (OFFICIAL SDK)
+# =============================
+from groq import Groq
+
 @st.cache_resource(show_spinner=False)
-def load_llm():
-    from langchain_groq import ChatGroq
-    return ChatGroq(
-        api_key=GROQ_KEY,
+def load_groq_client():
+    return Groq(api_key=GROQ_API_KEY)
+
+client = load_groq_client()
+
+# =============================
+# TAVILY SEARCH
+# =============================
+def tavily_search(query: str) -> str:
+    if not TAVILY_API_KEY:
+        return "Web search unavailable."
+
+    from tavily import TavilyClient
+    tavily = TavilyClient(api_key=TAVILY_API_KEY)
+    results = tavily.search(query=query, max_results=3)
+    return "\n".join([r["content"] for r in results["results"]])
+
+# =============================
+# LLM FUNCTIONS (PURE GROQ)
+# =============================
+def groq_complete(prompt: str) -> str:
+    completion = client.chat.completions.create(
         model="llama3-8b-8192",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
         temperature=0.3,
-        max_tokens=1024
+        max_tokens=1024,
     )
+    return completion.choices[0].message.content
 
-def load_search_tool():
-    if not TAVILY_KEY:
-        return None
-    from langchain_community.tools.tavily_search import TavilySearchResults
-    return TavilySearchResults(max_results=3)
-
-# =====================================================
-# AGENT LOGIC (NO invoke(), ONLY predict())
-# =====================================================
-def plan_research(llm, query: str) -> List[str]:
-    import re
-
+# =============================
+# AGENT LOGIC
+# =============================
+def plan_research(topic: str) -> List[str]:
     prompt = f"""
-You are a senior technical researcher.
-
 Break the topic below into EXACTLY 3 research goals.
 Return ONLY a numbered list.
 
 Topic:
-{query}
+{topic}
 """
+    text = groq_complete(prompt)
+    return re.findall(r"\d+\.\s*(.*)", text)[:3]
 
-    response = llm.invoke(prompt)
-    text = response.content if hasattr(response, "content") else str(response)
-
-def research_step(search_tool, goal: str) -> str:
-    if not search_tool:
-        return f"{goal}: (web search unavailable)"
-    result = search_tool.run(goal)
-    return f"{goal}:\n{result}"
-
-def write_report(llm, query: str, context: str) -> str:
+def write_report(topic: str, context: str) -> str:
     prompt = f"""
-Write a detailed technical comparison report.
+Write a structured technical comparison report.
 
 Topic:
-{query}
+{topic}
 
-Use the following researched information:
+Use this research information:
 {context}
 
-Structure the report with:
+Include:
 - Introduction
 - Feature comparison
-- Advantages & disadvantages
+- Pros & cons
 - Conclusion
 """
+    return groq_complete(prompt)
 
-    response = llm.invoke(prompt)
-    return response.content if hasattr(response, "content") else str(response)
-
-# =====================================================
-# UI INPUT
-# =====================================================
-query = st.text_input(
+# =============================
+# UI
+# =============================
+topic = st.text_input(
     "Enter a research topic",
-    placeholder="Compare Flipkart and Amazon in Indian e-commerce market"
+    placeholder="Compare Flipkart and Amazon in India"
 )
 
 run = st.button("Run Deep Research")
 
-# =====================================================
-# MAIN PIPELINE
-# =====================================================
 if run:
-    if not query.strip():
+    if not topic.strip():
         st.error("Please enter a topic")
         st.stop()
-
-    if not GROQ_KEY:
-        st.error("Groq API key missing. Cannot run research.")
-        st.stop()
-
-    llm = load_llm()
-    search_tool = load_search_tool()
-
-    state: AgentState = {
-        "query": query,
-        "research_plan": [],
-        "research_data": [],
-        "report": ""
-    }
 
     progress = st.progress(0)
     status = st.empty()
 
-    # ---------------- PLAN ----------------
+    # PLAN
     status.info("Planning research goals...")
-    state["research_plan"] = plan_research(llm, query)
-    progress.progress(25)
+    goals = plan_research(topic)
+    progress.progress(30)
     time.sleep(0.3)
 
-    st.subheader("Research Plan")
-    for i, g in enumerate(state["research_plan"], 1):
+    st.subheader("Research Goals")
+    for i, g in enumerate(goals, 1):
         st.markdown(f"**{i}. {g}**")
 
-    # ---------------- RESEARCH ----------------
+    # SEARCH
     status.info("Collecting web research...")
-    for idx, goal in enumerate(state["research_plan"]):
-        with st.spinner(f"Researching: {goal}"):
-            data = research_step(search_tool, goal)
-            state["research_data"].append(data)
+    research_blocks = []
+    for idx, goal in enumerate(goals):
+        with st.spinner(f"Searching: {goal}"):
+            research_blocks.append(tavily_search(goal))
             progress.progress(40 + idx * 15)
             time.sleep(0.3)
 
-    # ---------------- WRITE ----------------
+    # WRITE
     status.info("Writing final report...")
-    context = "\n\n".join(state["research_data"])
-    state["report"] = write_report(llm, query, context)
+    report = write_report(topic, "\n\n".join(research_blocks))
     progress.progress(100)
 
     status.success("Research complete")
 
     st.divider()
     st.subheader("Final Research Report")
-    st.write(state["report"])
+    st.write(report)
 
-# =====================================================
-# FOOTER
-# =====================================================
 st.divider()
-st.caption("AI-Q Deep Research Agent • Groq + Tavily • Streamlit Cloud")
+st.caption("Stable Groq + Tavily implementation • No LangChain")
