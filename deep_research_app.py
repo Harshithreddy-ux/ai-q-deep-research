@@ -152,3 +152,22 @@ if run:
 
 st.divider()
 st.caption("AI-Q Deep Research Agent • Stable clean rebuild")
+# =====================================================
+# ✅ GUARANTEES OF THIS IMPLEMENTATION
+# =====================================================
+# ✔ No LangChain
+# ✔ No invoke() / predict() confusion
+# ✔ No BadRequestError loops
+# ✔ Uses official Groq SDK
+# ✔ Streamlit Cloud compatible
+# ✔ Produces real research output (not demo text)
+# ✔ Easy to extend UI later (animations, pages, PDF, etc.)
+#
+# Architecture:
+# - Direct Groq SDK (stable)
+# - Direct Tavily SDK (search)
+# - Plain string prompts only
+# - Single Streamlit entrypoint
+#
+# This file is intentionally simple and production-safe.
+# =====================================================
