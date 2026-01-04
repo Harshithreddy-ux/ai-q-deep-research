@@ -99,13 +99,14 @@ Topic:
 {query}
 """
 
-    response = llm.invoke(
+    response = llm.invoke([
         HumanMessage(
             content=f"You are a senior technical researcher.\n\n{prompt}"
         )
-    )
+    ])
 
     return re.findall(r"\d+\.\s*(.*)", response.content)[:3]
+
 
 
 def research_step(search_tool, task: str) -> str:
@@ -127,11 +128,12 @@ Topic:
 {query}
 """
 
-    response = llm.invoke(
+    response = llm.invoke([
         HumanMessage(content=prompt)
-    )
+    ])
 
     return response.content
+
 
 
 # =========================================================
