@@ -60,6 +60,8 @@ def load_search_tool():
 # AGENT LOGIC (NO invoke(), ONLY predict())
 # =====================================================
 def plan_research(llm, query: str) -> List[str]:
+    import re
+
     prompt = f"""
 You are a senior technical researcher.
 
@@ -69,10 +71,9 @@ Return ONLY a numbered list.
 Topic:
 {query}
 """
-    response = llm.predict(prompt)
 
-    goals = re.findall(r"\d+\.\s*(.*)", response)
-    return goals[:3]
+    response = llm.invoke(prompt)
+    text = response.content if hasattr(response, "content") else str(response)
 
 def research_step(search_tool, goal: str) -> str:
     if not search_tool:
@@ -96,7 +97,9 @@ Structure the report with:
 - Advantages & disadvantages
 - Conclusion
 """
-    return llm.predict(prompt)
+
+    response = llm.invoke(prompt)
+    return response.content if hasattr(response, "content") else str(response)
 
 # =====================================================
 # UI INPUT
