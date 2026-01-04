@@ -5,32 +5,37 @@ import time
 from typing import List
 
 # =====================================================
-# PAGE CONFIG
+# PAGE CONFIG (NO LOGOS / NO EMOJIS)
 # =====================================================
 st.set_page_config(
     page_title="AI-Q Deep Research Agent",
     layout="wide"
 )
 
-st.title("🧠 AI-Q Deep Research Agent")
-st.caption("Clean rebuild • Groq + Tavily • Stable Streamlit Cloud version")
+st.markdown(
+    """
+    <h1 style="text-align:center;">AI-Q Deep Research Agent</h1>
+    <p style="text-align:center; color:gray;">
+    Interactive deep research system with live execution flow
+    </p>
+    """,
+    unsafe_allow_html=True
+)
+
 st.divider()
 
 # =====================================================
-# API KEYS (from Streamlit Secrets or env)
+# API KEYS
 # =====================================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 if not GROQ_API_KEY:
-    st.error("GROQ_API_KEY is missing. Add it in Streamlit → App Settings → Secrets.")
+    st.error("GROQ_API_KEY missing in Streamlit Secrets")
     st.stop()
 
-if not TAVILY_API_KEY:
-    st.warning("TAVILY_API_KEY not found. Web research will be limited.")
-
 # =====================================================
-# GROQ CLIENT (OFFICIAL SDK – NO LANGCHAIN)
+# GROQ CLIENT (OFFICIAL SDK)
 # =====================================================
 from groq import Groq
 
@@ -43,20 +48,18 @@ client = load_groq_client()
 def groq_complete(prompt: str) -> str:
     response = client.chat.completions.create(
         model="llama3-8b-8192",
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=1024,
     )
     return response.choices[0].message.content
 
 # =====================================================
-# TAVILY SEARCH (OPTIONAL)
+# TAVILY SEARCH
 # =====================================================
 def tavily_search(query: str) -> str:
     if not TAVILY_API_KEY:
-        return "Web search unavailable (TAVILY_API_KEY missing)."
+        return "Web search unavailable."
 
     from tavily import TavilyClient
     tavily = TavilyClient(api_key=TAVILY_API_KEY)
@@ -64,14 +67,12 @@ def tavily_search(query: str) -> str:
     results = tavily.search(query=query, max_results=3)
 
     if not results.get("results"):
-        return "No web results found."
+        return "No relevant web results found."
 
-    return "\n\n".join(
-        f"- {r['content']}" for r in results["results"]
-    )
+    return "\n".join(r["content"] for r in results["results"])
 
 # =====================================================
-# AGENT LOGIC (SIMPLE & SAFE)
+# AGENT LOGIC
 # =====================================================
 def plan_research(topic: str) -> List[str]:
     prompt = f"""
@@ -86,88 +87,91 @@ Topic:
 
 def write_report(topic: str, context: str) -> str:
     prompt = f"""
-Write a structured technical comparison report.
+Write a structured technical research report.
 
 Topic:
 {topic}
 
-Use this research information:
+Research information:
 {context}
 
-Structure:
-- Introduction
-- Feature comparison
-- Pros and cons
-- Conclusion
+Use headings, bullet points, and a conclusion.
 """
     return groq_complete(prompt)
 
 # =====================================================
-# UI
+# UI INPUT
 # =====================================================
+st.subheader("Enter Research Topic")
+
 topic = st.text_input(
-    "Enter a research topic",
+    "",
     placeholder="Compare Flipkart and Amazon in the Indian e-commerce market"
 )
 
-run = st.button("🚀 Run Deep Research")
+run = st.button("Run Deep Research", use_container_width=True)
 
+# =====================================================
+# INTERACTIVE PIPELINE
+# =====================================================
 if run:
     if not topic.strip():
-        st.error("Please enter a topic.")
+        st.warning("Please enter a research topic.")
         st.stop()
 
     progress = st.progress(0)
     status = st.empty()
 
-    # STEP 1: PLAN
+    # ---------------- PLAN ----------------
     status.info("Planning research goals...")
+    time.sleep(0.6)
+
     goals = plan_research(topic)
     progress.progress(25)
-    time.sleep(0.3)
 
-    st.subheader("📌 Research Goals")
-    for i, g in enumerate(goals, 1):
-        st.markdown(f"**{i}. {g}**")
-
-    # STEP 2: SEARCH
-    status.info("Collecting web research...")
-    research_blocks = []
-    for idx, goal in enumerate(goals):
-        with st.spinner(f"Searching: {goal}"):
-            research_blocks.append(tavily_search(goal))
-            progress.progress(40 + idx * 15)
+    st.subheader("Research Planning")
+    for i, goal in enumerate(goals, 1):
+        with st.expander(f"Goal {i}", expanded=True):
+            st.write(goal)
             time.sleep(0.3)
 
-    # STEP 3: WRITE
-    status.info("Writing final report...")
+    # ---------------- SEARCH ----------------
+    status.info("Collecting information from the web...")
+    time.sleep(0.6)
+
+    research_blocks = []
+    st.subheader("Information Gathering")
+
+    for idx, goal in enumerate(goals):
+        with st.expander(f"Searching for: {goal}", expanded=True):
+            with st.spinner("Searching..."):
+                result = tavily_search(goal)
+                research_blocks.append(result)
+                st.write(result[:1000])
+                progress.progress(40 + (idx + 1) * 15)
+                time.sleep(0.5)
+
+    # ---------------- WRITE ----------------
+    status.info("Synthesizing final report...")
+    time.sleep(0.6)
+
     report = write_report(topic, "\n\n".join(research_blocks))
     progress.progress(100)
 
-    status.success("Research complete")
+    status.success("Research completed successfully")
 
+    # ---------------- OUTPUT ----------------
     st.divider()
-    st.subheader("📄 Final Research Report")
-    st.write(report)
+    st.subheader("Final Research Report")
 
+    with st.expander("View Full Report", expanded=True):
+        st.write(report)
+
+# =====================================================
+# FOOTER
+# =====================================================
 st.divider()
-st.caption("AI-Q Deep Research Agent • Stable clean rebuild")
-# =====================================================
-# ✅ GUARANTEES OF THIS IMPLEMENTATION
-# =====================================================
-# ✔ No LangChain
-# ✔ No invoke() / predict() confusion
-# ✔ No BadRequestError loops
-# ✔ Uses official Groq SDK
-# ✔ Streamlit Cloud compatible
-# ✔ Produces real research output (not demo text)
-# ✔ Easy to extend UI later (animations, pages, PDF, etc.)
-#
-# Architecture:
-# - Direct Groq SDK (stable)
-# - Direct Tavily SDK (search)
-# - Plain string prompts only
-# - Single Streamlit entrypoint
-#
-# This file is intentionally simple and production-safe.
-# =====================================================
+st.markdown(
+    "<p style='text-align:center; color:gray;'>AI-Q Deep Research Agent • Interactive Mode</p>",
+    unsafe_allow_html=True
+)
