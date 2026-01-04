@@ -55,28 +55,23 @@ def load_llm():
         from langchain_groq import ChatGroq
 
         return ChatGroq(
-            model="llama3-70b-8192",
-            temperature=0.3
+            model="llama3-8b-8192",   # ✅ stable model
+            temperature=0.3,
+            max_tokens=1024
         )
 
     except Exception as e:
-        from langchain_core.messages import AIMessage
-
         class MockLLM:
-            def invoke(self, messages):
-                return AIMessage(
-                    content=f"""
-Demo mode active.
-
-Reason:
-{e}
-
-This shows the research pipeline works.
-"""
+            def invoke(self, prompt):
+                return type(
+                    "Obj",
+                    (),
+                    {
+                        "content": f"(Demo mode)\n\n{prompt}"
+                    }
                 )
 
         return MockLLM()
-
 
 def load_search_tool():
     if not TAVILY_KEY:
@@ -89,25 +84,20 @@ def load_search_tool():
 # =========================================================
 def plan_research(llm, query: str) -> List[str]:
     import re
-    from langchain_core.messages import HumanMessage
 
     prompt = f"""
-Break the following topic into exactly 3 clear research goals.
-Return them as a numbered list.
+You are a senior technical researcher.
+
+Break the following topic into EXACTLY 3 clear research goals.
+Return them as a numbered list (1., 2., 3.).
 
 Topic:
 {query}
 """
 
-    response = llm.invoke([
-        HumanMessage(
-            content=f"You are a senior technical researcher.\n\n{prompt}"
-        )
-    ])
+    response = llm.invoke(prompt)
 
     return re.findall(r"\d+\.\s*(.*)", response.content)[:3]
-
-
 
 def research_step(search_tool, task: str) -> str:
     if not search_tool:
@@ -116,26 +106,20 @@ def research_step(search_tool, task: str) -> str:
     return f"{task}\n{result}"
 
 def write_report(llm, query: str, context: str) -> str:
-    from langchain_core.messages import HumanMessage
-
     prompt = f"""
-Write a structured technical report using the information below.
+Write a structured technical comparison report.
 
 Context:
 {context}
 
 Topic:
 {query}
-"""
 
-    response = llm.invoke([
-        HumanMessage(content=prompt)
-    ])
+Use headings, bullet points, and a conclusion.
+"""
+    response = llm.invoke(prompt)
 
     return response.content
-
-
-
 # =========================================================
 # UI INPUT
 # =========================================================
