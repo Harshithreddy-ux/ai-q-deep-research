@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: deep-research-agent
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free

@@ -1,0 +1,11 @@
+streamlit
+python-dotenv
+langchain-tavily
+langchain-nvidia-ai-endpoints
+langgraph
+fastapi
+uvicorn
+transformers
+torch
+tensorboard
+
