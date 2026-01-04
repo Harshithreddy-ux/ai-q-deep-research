@@ -49,30 +49,29 @@ class AgentState(TypedDict):
 @st.cache_resource(show_spinner=False)
 def load_llm():
     try:
-        from langchain_nvidia_ai_endpoints import ChatNVIDIA
-        if not os.getenv("NVIDIA_API_KEY"):
-            raise RuntimeError("NVIDIA_API_KEY missing")
-        return ChatNVIDIA(
-            model="nvidia/llama-3.1-nemotron-70b-instruct"
+        if not os.getenv("GROQ_API_KEY"):
+            raise RuntimeError("GROQ_API_KEY missing")
+
+        from langchain_groq import ChatGroq
+
+        return ChatGroq(
+            model="llama3-70b-8192",
+            temperature=0.3
         )
-    except Exception:
+
+    except Exception as e:
         from langchain_core.messages import AIMessage
 
         class MockLLM:
             def invoke(self, messages):
-                user_text = messages[-1].content
                 return AIMessage(
                     content=f"""
-### Demo Research Output
+Demo mode active.
 
-**Topic:** {user_text}
+Reason:
+{e}
 
-This is a demo-mode response showing how the system works:
-- Research planning
-- Multi-step reasoning
-- Final synthesis
-
-(Real NVIDIA LLM can be plugged in when API access is available.)
+This shows the research pipeline works.
 """
                 )
 
