@@ -1,118 +1,181 @@
 import streamlit as st
 import os
 import re
+import time
 from typing import List, TypedDict
 
-# -------------------------
-# UI FIRST (VERY IMPORTANT)
-# -------------------------
+# =========================================================
+# PAGE CONFIG (NO LOGO)
+# =========================================================
 st.set_page_config(
-    page_title="AI-Q Deep Research",
-    layout="wide",
-    page_icon="🛡️"
+    page_title="AI-Q Deep Research Agent",
+    layout="wide"
 )
 
-st.title("🧠 AI-Q Deep Research Agent")
-st.write("🚀 App started successfully")
+# =========================================================
+# HEADER (CLEAN)
+# =========================================================
+st.markdown(
+    """
+    <h1 style='text-align:center;'>AI-Q Deep Research Agent</h1>
+    <p style='text-align:center;color:gray;'>
+    Interactive multi-step technical research assistant
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
-# -------------------------
-# ENV CHECK (SAFE)
-# -------------------------
+st.divider()
+
+# =========================================================
+# ENV CHECK
+# =========================================================
 TAVILY_KEY = os.getenv("TAVILY_API_KEY")
 
 if not TAVILY_KEY:
-    st.sidebar.warning("⚠️ TAVILY_API_KEY not found. Web search will be disabled.")
+    st.sidebar.warning("Web search disabled (TAVILY_API_KEY not found)")
 
-# -------------------------
+# =========================================================
 # STATE
-# -------------------------
+# =========================================================
 class AgentState(TypedDict):
+    query: str
     research_plan: List[str]
     collected_data: List[str]
-    steps_taken: int
-    query: str
 
-# -------------------------
-# LAZY LOADERS (SAFE)
-# -------------------------
+# =========================================================
+# LAZY LOADERS (SAFE FOR CLOUD)
+# =========================================================
+@st.cache_resource(show_spinner=False)
 def load_llm():
-    try:
-        from langchain_nvidia_ai_endpoints import ChatNVIDIA
-        return ChatNVIDIA(model="nvidia/llama-3.1-nemotron-70b-instruct")
-    except Exception as e:
-        st.error(f"❌ NVIDIA LLM failed to load: {e}")
-        return None
+    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+    return ChatNVIDIA(
+        model="nvidia/llama-3.1-nemotron-70b-instruct"
+    )
 
 def load_search_tool():
     if not TAVILY_KEY:
         return None
-    try:
-        from langchain_community.tools.tavily_search import TavilySearchResults
-        return TavilySearchResults(max_results=3)
-    except Exception as e:
-        st.warning(f"Tavily disabled: {e}")
-        return None
+    from langchain_community.tools.tavily_search import TavilySearchResults
+    return TavilySearchResults(max_results=3)
 
-# -------------------------
-# AGENT LOGIC
-# -------------------------
-def planner(llm, query: str):
+# =========================================================
+# AGENT FUNCTIONS
+# =========================================================
+def plan_research(llm, query: str) -> List[str]:
     from langchain_core.messages import SystemMessage, HumanMessage
 
-    prompt = f"Break this into 3 specific research goals:\n{query}"
+    prompt = f"""
+    Break the following topic into exactly 3 clear research goals.
+    Topic: {query}
+    """
     response = llm.invoke([
-        SystemMessage(content="You are a technical researcher."),
+        SystemMessage(content="You are a senior technical researcher."),
         HumanMessage(content=prompt)
     ])
     return re.findall(r"\d+\.\s*(.*)", response.content)[:3]
 
-def researcher(search_tool, task: str):
+def research_step(search_tool, task: str) -> str:
     if not search_tool:
-        return f"Search skipped for: {task}"
+        return f"{task}\n(No web search – offline reasoning only)"
     result = search_tool.invoke({"query": task})
-    return f"Goal: {task}\nResult: {result}"
+    return f"{task}\n{result}"
 
-def writer(llm, query: str, context: str):
+def write_report(llm, query: str, context: str) -> str:
     from langchain_core.messages import HumanMessage
-    prompt = f"Write a deep technical report based on:\n{context}\n\nTopic: {query}"
+    prompt = f"""
+    Write a structured technical report using the information below.
+
+    Context:
+    {context}
+
+    Topic:
+    {query}
+    """
     response = llm.invoke([HumanMessage(content=prompt)])
     return response.content
 
-# -------------------------
-# UI INTERACTION
-# -------------------------
+# =========================================================
+# UI INPUT
+# =========================================================
 query = st.text_input(
     "Enter a research topic",
-    placeholder="Compare Blackwell vs Hopper NVLink architecture"
+    placeholder="Compare Blackwell vs Hopper NVLink architecture",
+    key="query_input"
 )
 
-if st.button("🚀 Run Deep Analysis"):
+run = st.button("Run Deep Analysis")
+
+# =========================================================
+# MAIN EXECUTION
+# =========================================================
+if run:
+    query = st.session_state.get("query_input", "").strip()
+
     if not query:
         st.error("Please enter a topic")
-        st.stop()
-
-    llm = load_llm()
-    search_tool = load_search_tool()
-
-    if not llm:
         st.stop()
 
     state: AgentState = {
         "query": query,
         "research_plan": [],
-        "collected_data": [],
-        "steps_taken": 0,
+        "collected_data": []
     }
 
-    with st.spinner("Planning research goals..."):
-        state["research_plan"] = planner(llm, query)
+    progress = st.progress(0)
+    status = st.empty()
 
-    with st.spinner("Collecting data..."):
-        for task in state["research_plan"]:
-            state["collected_data"].append(researcher(search_tool, task))
+    # LOAD MODELS
+    status.info("Initializing research engine...")
+    llm = load_llm()
+    search_tool = load_search_tool()
+    progress.progress(10)
+    time.sleep(0.3)
 
-    with st.spinner("Writing final report..."):
-        report = writer(llm, query, "\n---\n".join(state["collected_data"]))
+    # PLANNING
+    status.info("Planning research goals...")
+    with st.spinner("Generating research plan"):
+        state["research_plan"] = plan_research(llm, query)
+    progress.progress(30)
+    time.sleep(0.3)
 
-    st.markdown("## 📊 Final Research Report")
-    st.write(report)
+    st.subheader("Research Plan")
+    for i, goal in enumerate(state["research_plan"], 1):
+        st.markdown(f"**{i}. {goal}**")
+
+    # RESEARCH
+    status.info("Collecting information...")
+    for idx, task in enumerate(state["research_plan"]):
+        with st.spinner(f"Researching: {task}"):
+            result = research_step(search_tool, task)
+            state["collected_data"].append(result)
+            progress.progress(50 + idx * 10)
+            time.sleep(0.3)
+
+    # WRITING
+    status.info("Writing final report...")
+    with st.spinner("Synthesizing insights"):
+        report = write_report(
+            llm,
+            query,
+            "\n\n".join(state["collected_data"])
+        )
+    progress.progress(100)
+
+    status.success("Analysis complete")
+
+    st.divider()
+
+    # OUTPUT (INTERACTIVE)
+    st.subheader("Final Research Report")
+
+    with st.expander("Show Report", expanded=True):
+        st.write(report)
+
+    st.success("Done")
+
+# =========================================================
+# FOOTER
+# =========================================================
+st.divider()
+st.caption("AI-Q Deep Research Agent • Streamlit Cloud Optimized")
