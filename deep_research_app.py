@@ -83,42 +83,63 @@ def tavily_search(query: str) -> str:
 # =====================================================
 def plan_research(topic: str) -> List[str]:
     prompt = f"""
-Create 3 short research goals for the topic below.
-Return only plain text, one goal per line.
+You are a senior market and technology analyst.
 
-Topic: {topic}
+Create 5 detailed research goals for the topic below.
+Each goal must focus on a DIFFERENT dimension such as:
+- Business model
+- Technology & logistics
+- Pricing & customer experience
+- Market presence & growth
+- Strengths, weaknesses & future outlook
+
+Return the goals as a numbered list.
+
+Topic:
+{topic}
 """
     text = groq_complete(prompt)
 
     goals = re.findall(r"\d+\.\s*(.*)", text)
 
-    # Fallback if Groq returns nothing
     if not goals:
         return [
-            f"Overview and background of {topic}",
-            f"Key features and differences in {topic}",
-            f"Advantages, disadvantages, and conclusion about {topic}"
+            f"Business model and market positioning of {topic}",
+            f"Technology stack, logistics, and supply chain comparison in {topic}",
+            f"Pricing strategy, offers, and customer experience in {topic}",
+            f"Market share, growth, and regional dominance in {topic}",
+            f"Strengths, weaknesses, and future outlook of {topic}",
         ]
 
-    return goals[:3]
-
+    return goals[:5]
 def write_report(topic: str, context: str) -> str:
     prompt = f"""
-Write a structured technical comparison report.
+You are an expert industry analyst.
 
-Topic:
+Write a VERY DETAILED, structured technical and business report
+comparing the following topic:
+
 {topic}
 
-Research information:
+Use the research information below:
 {context}
 
-Structure:
-- Introduction
-- Feature comparison
-- Pros and cons
-- Conclusion
+The report MUST include:
+
+1. Introduction (industry background)
+2. Business model comparison
+3. Technology & logistics comparison
+4. Pricing strategy & customer experience
+5. Market share & growth trends
+6. Strengths and weaknesses (table format in text)
+7. Future outlook and innovations
+8. Final conclusion and recommendation
+
+Use clear headings, bullet points, and sub-sections.
+Make the report comprehensive and in-depth.
 """
     return groq_complete(prompt)
+
 
 # =====================================================
 # UI INPUT
