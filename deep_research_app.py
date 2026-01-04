@@ -88,17 +88,25 @@ def load_search_tool():
 # AGENT FUNCTIONS
 # =========================================================
 def plan_research(llm, query: str) -> List[str]:
-    from langchain_core.messages import SystemMessage, HumanMessage
+    import re
+    from langchain_core.messages import HumanMessage
 
     prompt = f"""
-    Break the following topic into exactly 3 clear research goals.
-    Topic: {query}
-    """
-    response = llm.invoke([
-        SystemMessage(content="You are a senior technical researcher."),
-        HumanMessage(content=prompt)
-    ])
+Break the following topic into exactly 3 clear research goals.
+Return them as a numbered list.
+
+Topic:
+{query}
+"""
+
+    response = llm.invoke(
+        HumanMessage(
+            content=f"You are a senior technical researcher.\n\n{prompt}"
+        )
+    )
+
     return re.findall(r"\d+\.\s*(.*)", response.content)[:3]
+
 
 def research_step(search_tool, task: str) -> str:
     if not search_tool:
@@ -108,17 +116,23 @@ def research_step(search_tool, task: str) -> str:
 
 def write_report(llm, query: str, context: str) -> str:
     from langchain_core.messages import HumanMessage
+
     prompt = f"""
-    Write a structured technical report using the information below.
+Write a structured technical report using the information below.
 
-    Context:
-    {context}
+Context:
+{context}
 
-    Topic:
-    {query}
-    """
-    response = llm.invoke([HumanMessage(content=prompt)])
+Topic:
+{query}
+"""
+
+    response = llm.invoke(
+        HumanMessage(content=prompt)
+    )
+
     return response.content
+
 
 # =========================================================
 # UI INPUT
