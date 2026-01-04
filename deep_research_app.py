@@ -12,13 +12,36 @@ st.set_page_config(
     layout="wide"
 )
 
+# =====================================================
+# BACKGROUND ANIMATION (SUBTLE, NO LOGOS)
+# =====================================================
 st.markdown(
     """
-    <h1 style="text-align:center;">AI-Q Deep Research Agent</h1>
-    <p style="text-align:center;color:gray;">
-    Interactive deep research system with live execution flow
-    </p>
+    <style>
+    body {
+        background: linear-gradient(270deg, #f7f7f7, #ffffff, #f2f2f2);
+        background-size: 600% 600%;
+        animation: gradientMove 18s ease infinite;
+        font-family: Arial, sans-serif;
+    }
+    @keyframes gradientMove {
+        0% {background-position: 0% 50%;}
+        50% {background-position: 100% 50%;}
+        100% {background-position: 0% 50%;}
+    }
+    .small-text {
+        font-size: 14px;
+        line-height: 1.5;
+        color: #333;
+    }
+    </style>
     """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    "<h2 style='text-align:center;'>AI-Q Deep Research Agent</h2>"
+    "<p style='text-align:center; color:#555;'>Interactive research system</p>",
     unsafe_allow_html=True
 )
 
@@ -31,11 +54,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 if not GROQ_API_KEY:
-    st.error("GROQ_API_KEY missing. Add it in Streamlit → Settings → Secrets.")
+    st.error("GROQ_API_KEY missing in Streamlit Secrets.")
     st.stop()
 
 # =====================================================
-# GROQ CLIENT (OFFICIAL SDK)
+# GROQ CLIENT
 # =====================================================
 from groq import Groq
 
@@ -45,24 +68,24 @@ def load_groq_client():
 
 client = load_groq_client()
 
+def clean_text(text: str) -> str:
+    # remove emojis & symbols
+    return re.sub(r"[^\x00-\x7F]+", "", text)
+
 def groq_complete(prompt: str) -> str:
     try:
-        prompt = prompt[:6000]  # safety limit
-
         response = client.chat.completions.create(
             model="mixtral-8x7b-32768",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": prompt[:6000]}],
             temperature=0.3,
-            max_tokens=512,
+            max_tokens=700,
         )
-
-        return response.choices[0].message.content
-
+        return clean_text(response.choices[0].message.content)
     except Exception:
         return ""
 
 # =====================================================
-# TAVILY SEARCH (LIMITED SIZE)
+# TAVILY SEARCH
 # =====================================================
 def tavily_search(query: str) -> str:
     if not TAVILY_API_KEY:
@@ -72,149 +95,123 @@ def tavily_search(query: str) -> str:
     tavily = TavilyClient(api_key=TAVILY_API_KEY)
 
     results = tavily.search(query=query, max_results=3)
-
     if not results.get("results"):
-        return "No web data found."
+        return "No relevant web data found."
 
-    return "\n".join(r["content"][:1000] for r in results["results"])
+    return "\n".join(clean_text(r["content"][:800]) for r in results["results"])
 
 # =====================================================
 # AGENT LOGIC
 # =====================================================
 def plan_research(topic: str) -> List[str]:
     prompt = f"""
-You are a senior market and technology analyst.
+Create 5 detailed research goals for:
+{topic}
 
-Create 5 detailed research goals for the topic below.
-Each goal must focus on a different dimension such as:
+Focus on:
 - Business model
 - Technology & logistics
 - Pricing & customer experience
-- Market presence & growth
-- Strengths, weaknesses & future outlook
+- Market growth
+- Future outlook
 
-Return the goals as a numbered list.
-
-Topic:
-{topic}
+Return as numbered list.
 """
     text = groq_complete(prompt)
     goals = re.findall(r"\d+\.\s*(.*)", text)
 
     if not goals:
         return [
-            f"Business model and market positioning of {topic}",
-            f"Technology stack, logistics, and supply chain comparison in {topic}",
-            f"Pricing strategy, offers, and customer experience in {topic}",
-            f"Market share, growth, and regional dominance in {topic}",
+            f"Business model comparison of {topic}",
+            f"Technology and logistics comparison of {topic}",
+            f"Pricing strategy and customer experience of {topic}",
+            f"Market growth and regional dominance of {topic}",
             f"Strengths, weaknesses, and future outlook of {topic}",
         ]
-
     return goals[:5]
 
 def write_report(topic: str, context: str) -> str:
     prompt = f"""
-You are an expert industry analyst.
-
-Write a VERY DETAILED, structured technical and business report
-comparing the following topic:
+Write a LONG, detailed academic-style report on:
 
 {topic}
 
-Use the research information below:
+Using this research:
 {context}
 
-The report MUST include:
+Include:
+Introduction
+Detailed comparison sections
+Advantages & disadvantages
+Future outlook
+Conclusion
 
-1. Introduction (industry background)
-2. Business model comparison
-3. Technology & logistics comparison
-4. Pricing strategy & customer experience
-5. Market share & growth trends
-6. Strengths and weaknesses (table format in text)
-7. Future outlook and innovations
-8. Final conclusion and recommendation
-
-Use clear headings, bullet points, and sub-sections.
-Make the report comprehensive and in-depth.
+Avoid emojis and symbols.
 """
     return groq_complete(prompt)
 
 # =====================================================
-# UI INPUT
+# SEARCH-LIKE INPUT
 # =====================================================
 st.subheader("Enter Research Topic")
-
 topic = st.text_input(
     "",
-    placeholder="Compare Flipkart and Amazon in the Indian e-commerce market"
+    placeholder="Search here... (e.g., Flipkart vs Amazon India)"
 )
 
 run = st.button("Run Deep Research", use_container_width=True)
 
 # =====================================================
-# INTERACTIVE PIPELINE
+# PIPELINE
 # =====================================================
 if run:
     if not topic.strip():
-        st.warning("Please enter a research topic.")
+        st.warning("Please enter a topic.")
         st.stop()
 
     progress = st.progress(0)
     status = st.empty()
 
-    # ---------------- PLAN ----------------
-    status.info("Planning research goals...")
-    time.sleep(0.5)
-
+    status.info("Planning research...")
     goals = plan_research(topic)
     progress.progress(20)
 
     st.subheader("Research Goals")
-    for i, goal in enumerate(goals, 1):
-        with st.expander(f"Goal {i}", expanded=True):
-            st.write(goal)
+    for i, g in enumerate(goals, 1):
+        st.markdown(f"<div class='small-text'><b>Goal {i}:</b> {g}</div>",
+                    unsafe_allow_html=True)
 
-    # ---------------- SEARCH ----------------
-    status.info("Collecting information from the web...")
-    time.sleep(0.5)
-
+    status.info("Gathering information...")
     research_blocks = []
-    st.subheader("Information Gathering")
 
     for idx, goal in enumerate(goals):
-        with st.expander(f"Searching: {goal}", expanded=True):
-            with st.spinner("Searching..."):
-                result = tavily_search(
-                    goal + " market share pricing logistics technology customer experience India"
-                )
-                research_blocks.append(result)
-                st.write(result[:1000])
+        with st.expander(f"Searching: {goal}", expanded=False):
+            data = tavily_search(goal + " India e-commerce analysis")
+            research_blocks.append(data)
+            st.markdown(f"<div class='small-text'>{data}</div>",
+                        unsafe_allow_html=True)
+            progress.progress(min(30 + (idx + 1) * 10, 90))
+            time.sleep(0.3)
 
-                # ✅ SAFE progress calculation (NO overflow)
-                progress.progress(min(30 + (idx + 1) * 10, 90))
-                time.sleep(0.4)
-
-    # ---------------- WRITE ----------------
-    status.info("Writing final report...")
-    time.sleep(0.5)
-
+    status.info("Generating final report...")
     report = write_report(topic, "\n\n".join(research_blocks))
     progress.progress(100)
 
-    status.success("Research completed successfully")
+    st.success("Research completed")
 
-    # ---------------- OUTPUT ----------------
     st.divider()
     st.subheader("Final Research Report")
-    with st.expander("View Full Report", expanded=True):
-        st.write(report)
+
+    st.markdown(
+        f"<div class='small-text'>{report}</div>",
+        unsafe_allow_html=True
+    )
 
 # =====================================================
 # FOOTER
 # =====================================================
 st.divider()
 st.markdown(
-    "<p style='text-align:center;color:gray;'>AI-Q Deep Research Agent • Interactive Mode</p>",
+    "<p style='text-align:center; font-size:13px; color:#666;'>AI-Q Deep Research Agent</p>",
     unsafe_allow_html=True
 )
