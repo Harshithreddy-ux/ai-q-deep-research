@@ -60,11 +60,24 @@ def load_llm():
 
         class MockLLM:
             def invoke(self, messages):
+                user_text = messages[-1].content
                 return AIMessage(
-                    content="(Mock response) NVIDIA LLM not available on Streamlit Cloud.\n\nThis is a demo-safe fallback response."
+                    content=f"""
+### Demo Research Output
+
+**Topic:** {user_text}
+
+This is a demo-mode response showing how the system works:
+- Research planning
+- Multi-step reasoning
+- Final synthesis
+
+(Real NVIDIA LLM can be plugged in when API access is available.)
+"""
                 )
 
         return MockLLM()
+
 
 def load_search_tool():
     if not TAVILY_KEY:
